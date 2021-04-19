@@ -330,7 +330,7 @@ class VariableClustering:
     
     def __labels__(self, labels_, features):
         
-        '''Rearrage cluster labels.'''
+        '''Rearrange cluster labels.'''
         a = labels_.T
         for n in range(1,a.shape[1]):
             a[:,n] = np.where(a[:,n]==0,a[:,n-1],a[:,n])
