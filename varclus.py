@@ -18,16 +18,15 @@ from itertools import permutations
 from math import factorial
 import math
 
-__all__ = ['VariableClustering', 'random_variables', 
-           '_pca_', '_variance_', 'reassign_var']
+__all__ = ['VariableClustering', 
+           'random_variables', 
+           'reassign_var']
 
 class VariableClustering:
     
     '''
-    This algorithm clusters variable hierarchically by 
-    using principal component. 
-    
-    versionadded:: 10-09-2021
+    This algorithm clusters variable hierarchically by using 
+    principal component. 
     
     Parameters
     ----------
@@ -35,39 +34,36 @@ class VariableClustering:
         The function to split variables, which are;
         
         [1] "eigval" 
-            splitting happens when the largest eigenvalue 
-            associated with the second principal component is 
-            greater than `maxeigval2`.
+            splitting happens when the largest eigenvalue associated 
+            with the second principal component is greater than 
+            `maxeigval2`.
             
         [2] "varexp" 
-            splitting happens when the smallest percentage of 
-            variation explained by its cluster component is 
-            less than `proportion`.
+            splitting happens when the smallest percentage of variation 
+            explained by its cluster component is less than `proportion`.
 
     maxeigval2 : float, default=0.8
-        Maximum value of second eigenvalue when choosing a 
-        cluster to split. The algorithm stops when all values 
-        of second eigenvalue are less than `maxeigval2`. Only 
-        applicable if `option` is "eigval".
+        Maximum value of second eigenvalue when choosing a cluster to 
+        split. The algorithm stops when all values of second eigenvalue 
+        are less than `maxeigval2`. Only applicable if `option` is 
+        "eigval".
     
     proportion : float, default=0.75
-        Minimum proportion of variation explained when choosing 
-        a cluster to split. The algorithm stops when all 
-        proportions of variation explained is greater than
-        `proportion`. Only applicable if `option` is "varexp".
+        Minimum proportion of variation explained when choosing a cluster 
+        to split. The algorithm stops when all proportions of variation 
+        explained is greater than `proportion`. Only applicable if 
+        `option` is "varexp".
 
     maxclus : int, default=10 
-        The largest number of clusters desired. The algorithm
-        stops splitting clusters after the number of clusters 
-        reaches `maxclus`.
+        The largest number of clusters desired. The algorithm stops 
+        splitting clusters after the number of clusters reaches `maxclus`.
     
     maxsearch : int, default=1
-        The maximum number of iterations during the selecting 
-        subset of variables.
+        The maximum number of iterations during the selecting subset of 
+        variables.
     
-    seed : int, default=0
-        Determines random number generation for selecting a
-        subset of variables. 
+    random_state : int, or None, default=None
+        Controls the randomness of the permutaton of variable sets.
     
     Attributes
     ----------
@@ -95,24 +91,23 @@ class VariableClustering:
         R-Squared Ratio table.
 
     labels_ : pd.DataFrame
-        The order of the clusters corresponds to the  
-        splitting layer.
+        The order of the clusters corresponds to the  splitting layer.
 
     clus_corr : pd.DataFrame
-        Table of the correlation of each variable with each 
-        cluster component.
+        Table of the correlation of each variable with each cluster 
+        component.
 
     inter_corr : pd.DataFrame
-        Table of intercorrelations contains the correlations 
-        between the cluster components.
-
+        Table of intercorrelations contains the correlations between 
+        the cluster components.
+    
     References
     ----------
     .. [1] VarClusHi, https://pypi.org/project/varclushi/
-    .. [2] SAS, https://support.sas.com/documentation/onlinedoc/
-           stat/132/varclus.pdf
-    .. [3] https://factor-analyzer.readthedocs.io/en/latest/
-           _modules/factor_analyzer/rotator.html
+    .. [2] SAS, https://support.sas.com/documentation/onlinedoc/stat/
+           132/varclus.pdf
+    .. [3] https://factor-analyzer.readthedocs.io/en/latest/_modules/
+           factor_analyzer/rotator.html
     .. [4] https://support.sas.com/resources/papers/proceedings/
            proceedings/sugi26/p261-26.pdf
         
@@ -144,7 +139,7 @@ class VariableClustering:
     >>> vc.inter_corr
     '''
     def __init__(self, option='eigval', maxeigval2=0.8, proportion=0.75, 
-                 maxclus=10, maxsearch=1, seed=0):
+                 maxclus=10, maxsearch=1, random_state=0):
         
         if option not in ['eigval','varexp']:
             raise ValueError(f'`option` must be "eigval" or "varexp". ' 
@@ -170,17 +165,17 @@ class VariableClustering:
                              f'It must be integer and greater than 0.' 
                              f'Got {maxsearch}')
         
-        if not isinstance(seed, int):
-            raise ValueError(f'`seed` is a random number generation. '
+        if not isinstance(random_state, int):
+            raise ValueError(f'`random_state` is a random number generation. '
                              f'It must be integer and greater than 0.' 
-                             f'Got {seed}')
+                             f'Got {random_state}')
         
         self.option = option
         self.maxeigval2 = max(maxeigval2,0.)
         self.proportion = min(max(proportion,0.),1.)
         self.maxclus = max(maxclus,2)
         self.maxsearch = max(maxsearch,1)
-        self.seed = max(seed, 0)
+        self.random_state = max(random_state, 0)
 
     def fit(self, X):
         
@@ -218,24 +213,23 @@ class VariableClustering:
             R-Squared Ratio table.
         
         labels_ : pd.DataFrame
-            The order of the clusters corresponds to the  
-            splitting layer.
+            The order of the clusters corresponds to the splitting layer.
         
         clus_corr : pd.DataFrame
-            Table of the correlation of each variable with each 
-            cluster component.
+            Table of the correlation of each variable with each cluster 
+            component.
         
         inter_corr : pd.DataFrame
-            Table of intercorrelations contains the correlations 
-            between the cluster components.
+            Table of intercorrelations contains the correlations between 
+            the cluster components.
         
         References
         ----------
         .. [1] VarClusHi, https://pypi.org/project/varclushi/
-        .. [2] SAS, https://support.sas.com/documentation/onlinedoc/
-               stat/132/varclus.pdf
-        .. [3] https://factor-analyzer.readthedocs.io/en/latest/
-               _modules/factor_analyzer/rotator.html
+        .. [2] SAS, https://support.sas.com/documentation/onlinedoc/stat/
+               132/varclus.pdf
+        .. [3] https://factor-analyzer.readthedocs.io/en/latest/_modules/
+               factor_analyzer/rotator.html
         .. [4] https://support.sas.com/resources/papers/proceedings/
                proceedings/sugi26/p261-26.pdf
         
@@ -332,7 +326,7 @@ class VariableClustering:
                 fin_c1, fin_c2, max_var = reassign_var(X[clus1].copy(), 
                                                        X[clus2].copy(),
                                                        niter=self.maxsearch, 
-                                                       seed=self.seed)
+                                                       random_state=self.random_state)
                 
                 # Recalculate Eigenvalues, Variance Proportions and 
                 # Principal Components with final sets of features.
@@ -378,18 +372,17 @@ class VariableClustering:
     def __rsquare__(self, X):
         
         '''
-        R-Squared Ratio is the ratio of one minus the value 
-        of in the own cluster (`RS_Own`) to one minus the value 
-        in the next closest cluster (`RS_NC`). The occurrence 
-        of low ratios indicates well-separated clusters and it 
-        can be mathematically expressed as follows:
+        R-Squared Ratio is the ratio of one minus the value of in the own 
+        cluster (`RS_Own`) to one minus the value in the next closest 
+        cluster (`RS_NC`). The occurrence of low ratios indicates well-
+        separated clusters and it can be mathematically expressed as 
+        follows:
         
-                       RS = (1-RS_Own)/(1-RS_NC)
+                           RS = (1-RS_Own)/(1-RS_NC)
         
-        where `RS_Own` is the squared correlation of the variable
-        with its own cluster component, and `RS_NC` is the next 
-        highest squared correlation of the variable with a 
-        cluster component.
+        where `RS_Own` is the squared correlation of the variable with its 
+        own cluster component, and `RS_NC` is the next highest squared 
+        correlation of the variable with a cluster component.
         
         Parameters
         ----------
@@ -460,12 +453,12 @@ class VariableClustering:
         Attributes
         ----------
         clus_corr : pd.DataFrame
-            Table of the correlation of each variable with each 
-            cluster component.
+            Table of the correlation of each variable with each cluster 
+            component.
         
         inter_corr : pd.DataFrame
-            Table of intercorrelations contains the correlations 
-            between the cluster components.
+            Table of intercorrelations contains the correlations between 
+            the cluster components.
         
         '''
         corr_table = []
@@ -501,31 +494,30 @@ def _pca_(X, n_pcs=2):
     ----------
     X : pd.DataFrame
         An input array.
-
+    
     n_pcs : int, default=2
-        The first nth of principal components. If not 
-        provided, it defaults to 2. Value is capped  
-        between 2 and number of features (X.shape[1]).
+        The first nth of principal components. If not provided, it 
+        defaults to 2. Value is capped between 2 and number of 
+        features (X.shape[1]).
 
     Returns
     -------
     eigvals : ndarray 
-        1D_array of Eigenvalues that correspond to the
-        first nth principal components (`n_pcs`).
+        1D_array of Eigenvalues that correspond to the first nth 
+        principal components (`n_pcs`).
 
     eigvecs : ndarray 
-        2D-array of Eigenvectors that correspond to the
-        first nth principal components (`n_pcs`).
+        2D-array of Eigenvectors that correspond to the first nth 
+        principal components (`n_pcs`).
 
     varprops : ndarray  
-        1D-array of Variance-Explained that correspond
-        to the first nth principal components (`n_pcs`).
+        1D-array of Variance-Explained that correspond to the first 
+        nth principal components (`n_pcs`).
 
     princomps : ndarray 
-        2D-array of principal components that correspond 
-        to the first nth principal components (`n_pcs`).
-        If X.shape[1] equals to 0, `princomps` defaults to
-        np.ones((X.shape[0],1)).
+        2D-array of principal components that correspond to the first 
+        nth principal components (`n_pcs`). If X.shape[1] equals to 0, 
+        `princomps` defaults to np.ones((X.shape[0],1)).
     
     '''
     # Number of Principal Components.
@@ -556,13 +548,13 @@ def _pca_(X, n_pcs=2):
     # Principal Components.
     princomps = np.dot(std_X, eigvecs)
     return eigvals, eigvecs, varprops, princomps
-    
+
 def _variance_(X1, X2):
 
     '''
-    This function calulates variance (Eigenvalue) and 
-    weighted averge of explained-variances (proportion)
-    between 2 sets of variables or datasets.
+    This function calulates variance (Eigenvalue) and weighted averge 
+    of explained-variances (proportion) between 2 sets of variables 
+    or datasets.
 
     Parameters
     ----------
@@ -578,8 +570,8 @@ def _variance_(X1, X2):
         Total variance from 2 groups of variables.
 
     tot_prop : float
-        Weighted average of proportion explained from 
-        2 groups of variables.
+        Weighted average of proportion explained from 2 groups of 
+        variables.
     
     '''
     # Determine Eigenvalues and variance-explained.
@@ -594,14 +586,13 @@ def _variance_(X1, X2):
     tot_prop = sum(varprops*n_features)/sum(n_features)
     return tot_var, tot_prop
 
-def reassign_var(X1, X2, niter=1, seed=0):
+def reassign_var(X1, X2, niter=1, random_state=0):
         
     '''
-    For each interation, variable gets reassigned randomly 
-    to the other group and weighted variance is calculated 
-    accordingly. The algorithm stops when variance stops
-    improving (convergence) or number of iterations is
-    reached.
+    For each interation, variable gets reassigned randomly to the 
+    other group and weighted variance is calculated accordingly. The 
+    algorithm stops when variance stops improving (convergence) or 
+    number of iterations isreached.
 
     Parameters
     ----------
@@ -614,9 +605,8 @@ def reassign_var(X1, X2, niter=1, seed=0):
     niter : int, default=1
         Number of iterations (permuations).
 
-    seed : int, default=0
-        Determines random number generation for selecting a 
-        subset of variables. 
+    random_state : int, or None, default=None
+        Controls the randomness of the permutaton of variable sets.
 
     Returns
     -------
@@ -627,8 +617,8 @@ def reassign_var(X1, X2, niter=1, seed=0):
         List of variables in cluster 2.
 
     max_var : float
-        Weighted average of proportion explained from 2 
-        groups of variables.
+        Weighted average of proportion explained from 2 groups of 
+        variables.
         
     '''
     # Initial parameters.
@@ -638,7 +628,7 @@ def reassign_var(X1, X2, niter=1, seed=0):
     X = X1.merge(X2, left_index=True, right_index=True, how='left')
 
     # Randomly permute `n` sets of features.
-    args = (list(X), niter, seed)
+    args = (list(X), niter, random_state)
     permvars = random_variables(*args)
 
     for perm in permvars.values():
@@ -671,7 +661,7 @@ def reassign_var(X1, X2, niter=1, seed=0):
 
     return fin_c1, fin_c2, max_var
 
-def random_variables(varlist, niter=1, seed=0):
+def random_variables(varlist, niter=1, random_state=0):
         
     '''
     Randomly permute `n` sets of features.
@@ -683,10 +673,9 @@ def random_variables(varlist, niter=1, seed=0):
     
     niter : int, default=1
         Number of iterations (permuations).
-    
-    seed : int, default=0
-        Determines random number generation for selecting a 
-        subset of variables.
+
+    random_state : int, or None, default=None
+        Controls the randomness of the permutaton of variable sets.
 
     Returns
     -------
@@ -703,12 +692,12 @@ def random_variables(varlist, niter=1, seed=0):
      6: ['A', 'B', 'C']}
      
     '''
-    np.random.seed(seed)
+    rand = np.random.RandomState(random_state)
     n_vars = len(varlist)
     maxiter = min(niter, factorial(n_vars))
     randvars, args = dict(), (varlist, n_vars, False)
     while len(randvars.values()) < maxiter:
-        perm = np.random.choice(*args).tolist()
+        perm = rand.choice(*args).tolist()
         if perm not in randvars.values():
             keys = randvars.keys()
             m = max(keys) if len(keys)>0 else 0
