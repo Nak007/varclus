@@ -17,6 +17,19 @@ from factor_analyzer import Rotator
 from itertools import permutations
 from math import factorial
 import math
+from matplotlib.colors import ListedColormap
+from matplotlib import cm
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import matplotlib.transforms as transforms
+from matplotlib.ticker import(FixedLocator, 
+                              FixedFormatter, 
+                              StrMethodFormatter,
+                              FuncFormatter)
+
+plt.rcParams.update({'font.family':'sans-serif'})
+plt.rcParams.update({'font.sans-serif':'Hiragino Sans GB'})
+plt.rc('axes', unicode_minus=False)
 
 __all__ = ['VariableClustering', 
            'random_variables', 
@@ -484,6 +497,50 @@ class VariableClustering:
                           np.corrcoef(pcs)))
         self.inter_corr = pd.DataFrame(corr, columns=columns)\
         .astype({('Cluster',''):int}).set_index(['Cluster'])
+        
+    def plot(self, k=None, ax=None, color="#FC427B", plot_kwds=None, 
+             show_anno=True, tight_layout=True):
+        
+        '''
+        Plot dendrogram.
+
+        Parameters
+        ----------
+        k : int, default=None
+            Number of clusters to be plotted. If None, it takes a 
+            maximum number of clusters. 
+
+        ax : Matplotlib axis object, default=None
+            Predefined Matplotlib axis. If None, ax is created with 
+            default figsize.
+
+        color : Color-hex, default="#FC427B"
+            Color to be passed to "ax.plot". This overrides "plot_kwds".
+
+        plot_kwds : keywords, default=None
+            Keyword arguments to be passed to "ax.plot".
+
+        show_anno : bool, default=True
+            If True, it annotates the cumulative proportion of explained
+            variance of all splitting nodes.
+
+        tight_layout : bool, default=True
+            If True, it adjusts the padding between and around subplots 
+            i.e. plt.tight_layout().
+
+        Returns
+        -------
+        ax : Matplotlib axis object
+
+        '''
+        args = (self.info["Eigval1"], self.labels_, k)
+        output = get_dendrogram_data(*args)
+        kwargs = dict(ax=ax, color=color, 
+                      plot_kwds=plot_kwds, 
+                      show_anno=show_anno, 
+                      tight_layout=tight_layout)
+        ax = plot_dendro_base(output, **kwargs)
+        return ax
 
 def _pca_(X, n_pcs=2):
         
@@ -575,7 +632,8 @@ def _variance_(X1, X2):
     
     '''
     # Determine Eigenvalues and variance-explained.
-    eigvals1, varprops1, eigvals2, varprops2 = (np.zeros(2),)*4
+    eigvals1, varprops1 = np.zeros(2), np.zeros(2)
+    eigvals2, varprops2 = np.zeros(2), np.zeros(2)
     if X1.shape[1]>0: eigvals1, _, varprops1, _ = _pca_(X1)
     if X2.shape[1]>0: eigvals2, _, varprops2, _ = _pca_(X2)
     n_features = np.array([X1.shape[1], X2.shape[1]])
@@ -592,7 +650,7 @@ def reassign_var(X1, X2, niter=1, random_state=0):
     For each interation, variable gets reassigned randomly to the 
     other group and weighted variance is calculated accordingly. The 
     algorithm stops when variance stops improving (convergence) or 
-    number of iterations isreached.
+    number of iterations is reached.
 
     Parameters
     ----------
@@ -703,3 +761,230 @@ def random_variables(varlist, niter=1, random_state=0):
             m = max(keys) if len(keys)>0 else 0
             randvars[m+1] = perm
     return randvars
+
+def get_dendrogram_data(eigval1, labels, k=None):
+    
+    '''
+    Generate data for dendropgram plot.
+    
+    Parameters
+    ----------
+    eigval1 : array-like of, shape (n_clusters,)
+        The total explained variations or the first eigenvalues. The 
+        order must correspond to the splitting layer.
+        
+    labels : pd.DataFrame
+        The order of the clusters corresponds to the splitting layer.
+    
+    k : int, default=None
+        Number of clusters to be plotted. If None, it takes a 
+        maximum number of clusters.
+    
+    Returns
+    -------
+    Results : collections.OrderedDict
+        A dictionary subclass that collects results as follows:
+        - "lines"     : Coordinates of dendrogram lines
+        - "dist"      : Distance of each splitting layer
+        - "n_samples" : Number of features at terminal nodes
+        - "coords"    : Final coordinate of terminal nodes
+        
+    '''
+    # Validate k (number of clusters).
+    max_clusters = labels.shape[1] + 1
+    if k is None: k = max_clusters
+    elif isinstance(k, (int, float)):
+        if not ((2<=k) & (k<=max_clusters)):
+            raise ValueError(f"`k` must be within [2,{max_clusters}]. " 
+                             f"Got {k} instead.")
+        else: k = int(k)
+    else: raise ValueError(f"`k` must be integer. " 
+                           f"Got {type(k)} instead.")
+    
+    # Create unique paths.
+    nodes = labels.copy()
+    n_features = labels.shape[0]
+    ones  = np.ones((nodes.shape[0],1))
+    paths = np.hstack((ones, np.array(nodes)))
+    paths = paths.astype(int)[:,:k]
+    unq_paths = []
+    for path in paths.tolist():
+        if path not in unq_paths:
+            unq_paths.append(path)        
+    nodes = np.array(unq_paths)
+
+    # Create distance.
+    dist = eigval1[:k].copy()
+    dist = np.r_[sum(dist[:2]), dist[2:], n_features - sum(dist)]
+    dist = np.cumsum(dist/sum(dist))[::-1]
+
+    # Number of features at respective terminal nodes.
+    unq, cnt = np.unique(paths[:,k-1], return_counts=True)
+    n_samples = dict(n for n in zip(unq, cnt))
+
+    # Create initial coordinates.
+    coords = dict((c,[0,i]) for i,c in 
+                  enumerate(nodes[:,k-1][::-1],1))
+
+    # Initialize parameters.
+    lines = []
+    nodes_ = nodes.copy()
+    base_x = 0
+
+    for n,x2 in zip(np.arange(k-1)[::-1], -np.diff(dist)):
+
+        # Find which nodes should be split.
+        unq_nodes, cnts = np.unique(nodes_[:,n], return_counts=True)
+        split_node = nodes[:,n]==int(unq_nodes[cnts==2])
+        merge = np.unique(nodes[split_node, n+1])
+
+        # Coordinate of merged nodes.
+        x0, y0 = coords[merge[0]]
+        x1, y1 = coords[merge[1]]
+
+        # Draw a line that connects to nodes.
+        y_mean = np.mean([y0,y1])
+        base_x += x2
+        x_ = [x0, base_x, base_x, base_x, x1]
+        y_ = [y0, y0, y_mean, y1, y1]
+        lines.append([x_,y_])
+
+        # Update averge y to both points.
+        coords[merge[0]] = [base_x, y_mean]
+        coords[merge[1]] = [base_x, y_mean]
+
+        # Delete row.
+        keep = nodes_[:,n+1]!=max(merge)
+        nodes_ = nodes_[keep,:]
+     
+    keys = ["lines", "dist", "n_samples", "coords"]
+    Results = collections.namedtuple("Results", keys)
+    return Results(*(lines, dist, n_samples, coords)) 
+
+def plot_dendro_base(Results, ax=None, color="#FC427B", plot_kwds=None, 
+                     show_anno=True, tight_layout=True):
+    
+    '''
+    Plot dendrogram from "get_dendrogram_data".
+    
+    Parameters
+    ----------
+    Results : collections.OrderedDict
+        A dictionary subclass that collects results as follows:
+        - "lines"     : Coordinates of dendrogram lines
+        - "dist"      : Distance of each splitting layer
+        - "n_samples" : Number of features at terminal nodes
+        - "coords"    : Final coordinate of terminal nodes
+        
+    ax : Matplotlib axis object, default=None
+        Predefined Matplotlib axis. If None, ax is created with 
+        default figsize.
+    
+    color : Color-hex, default="#FC427B"
+        Color to be passed to "ax.plot". This overrides "plot_kwds".
+        
+    plot_kwds : keywords, default=None
+        Keyword arguments to be passed to "ax.plot".
+    
+    show_anno : bool, default=True
+        If True, it annotates the cumulative proportion of explained
+        variance of all splitting nodes.
+    
+    tight_layout : bool, default=True
+        If True, it adjusts the padding between and around subplots 
+        i.e. plt.tight_layout().
+    
+    Returns
+    -------
+    ax : Matplotlib axis object
+    
+    '''
+    lines = Results.lines
+    dist = Results.dist
+    n_samples = Results.n_samples
+    coords = Results.coords
+    
+    if ax is None:
+        n_clusters = len(n_samples)
+        width  = max(6.5, n_clusters*0.5)
+        height = max(5, n_clusters*5/6.5*0.5)
+        ax = plt.subplots(figsize=(width,height))[1]
+
+    # Plot the dendrogram.
+    kwds = dict(linewidth=3, zorder=-1,
+                 solid_capstyle ="round", 
+                 solid_joinstyle="round")
+    if plot_kwds is None: plot_kwds = kwds
+    else: plot_kwds = {**kwds, **plot_kwds}
+    plot_kwds.update({"color":color})
+
+    bbox = dict(facecolor="none", pad=0.2,
+                edgecolor='none', boxstyle="round")
+    kwds = dict(textcoords='offset points', fontsize=13, 
+                xytext=(-5, 0), va="center", ha="right", bbox=bbox)
+    for (xs,ys),v in zip(lines, dist[1:]):
+        plot_kwds.update(dict(color=color))
+        ax.plot(xs, ys, **plot_kwds)
+        if show_anno:
+            plot_kwds.update(dict(color="k"))
+            ax.annotate("{:.0%}".format(v),(xs[2], ys[2]), **kwds)
+
+    # Set xticks, and xticklabels.
+    x_max = ax.get_xlim()[1]
+    ax.set_xlim(0, x_max)
+    act_x, abr_x = lines[-1][0][2],  dist[-1]
+    ratio = (1 - abr_x)/(0 - act_x)
+    ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(6))
+    ax.xaxis.set_tick_params(labelsize=12)
+    xticks = [t for t in ax.get_xticks() if t <= x_max]
+    xticklabels = (np.r_[xticks] - act_x) * ratio + abr_x
+    xticklabels = ["{:.0%}".format(t) for t in xticklabels]
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xticklabels)
+    ax.set_xlabel("Proportion of Variance Explained", fontsize=13)
+
+    # Set axis attributes.
+    ax.set_ylim(0.7, len(coords)+0.3)
+    ax.set_yticks([])
+    ax.set_yticklabels([])
+    ax.spines["left"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.set_facecolor('white')
+    ax.patch.set_alpha(0)
+
+    # Annotation at terminal nodes.
+    ax_x0, dx0 = bounding_box(ax).x0, 5
+    kwds = dict(textcoords='offset points', fontsize=13, 
+                va="center", ha="right", bbox=bbox)
+
+    for n,c in enumerate(coords.keys(),1):
+        # Annotation for group number.
+        kwds.update({"color":"k", "xytext":(-dx0, 0)})
+        text = ax.annotate(f"{c}", (0,n), **kwds)
+
+        # Annotation for number of samples.
+        if n_samples[c]>1:
+            t_bbox = bounding_box(text)
+            dx1 = dx0 / (ax_x0 - t_bbox.x1) * t_bbox.width
+            kwds.update({"color":"#cccccc", "xytext":(-dx1-2*dx0, 0)})
+            ax.annotate( "({:,d})".format(n_samples[c]), (0,n), **kwds)
+
+    # Plot the beginning node.
+    (xs,ys), n_total = lines[-1], sum(n_samples.values()) 
+    plot_kwds.update(dict(color=color))
+    ax.plot([xs[2],x_max], [ys[2],ys[2]], **plot_kwds)
+    kwds = dict(textcoords='offset points', fontsize=13,
+                color="#cccccc", xytext=(5, 0), va="center", 
+                ha="left", bbox=bbox)
+    ax.annotate("({:,d})".format(n_total),(x_max, ys[2]), **kwds)
+    if tight_layout: plt.tight_layout()
+    return ax
+
+def bounding_box(obj):
+    
+    '''Private function: Get bounding box'''
+    fig = plt.gcf()
+    renderer = fig.canvas.get_renderer()
+    return (obj.get_window_extent(renderer=renderer)
+            .transformed(plt.gca().transAxes))
